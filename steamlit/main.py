@@ -2,8 +2,14 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
+from scipy.stats import pearsonr
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+import statsmodels.api as sm
 
-# 시스템에 따라 폰트 경로 다를 수 있음 (NanumGothic 기준)
+
 plt.rcParams['font.family'] = 'AppleGothic'
 plt.rcParams['axes.unicode_minus'] = False
 sns.set_theme(font='AppleGothic')
@@ -34,8 +40,40 @@ shortPass_tmp_2_df = shortPass_2_df.groupby('matchResult')[['shortPassTry','shor
 st.set_page_config(page_title="FC온라인 분석 대시보드", layout="wide")
 
 # --- 사이드바 ---
-st.sidebar.title("📁 페이지 이동")
-page = st.sidebar.radio("이동할 페이지를 선택하세요:", ["🏠 프로젝트 소개", "📊 모델 실험", "⚽ 주요 변수 비교 분석"])
+# st.sidebar.title("📁 페이지 이동")
+# page = st.sidebar.radio("이동할 페이지를 선택하세요:", ["🏠 프로젝트 소개", "📊 모델 실험", "⚽ 주요 변수 비교 분석"])
+# 페이지 목록
+pages = {
+    "🏠 프로젝트 소개": "intro",
+    "📊 모델 실험": "model",
+    "⚽ 주요 변수 비교 분석": "analysis"
+}
+
+# 선택된 페이지 상태 유지
+if "selected_page" not in st.session_state:
+    st.session_state.selected_page = "🏠 프로젝트 소개"
+
+# 사이드바 타이틀
+st.sidebar.markdown("""
+                    ## FC온라인 데이터 분석 프로젝트
+                    """)
+
+# 버튼 스타일 네비게이션
+for page_name in pages:
+    if st.sidebar.button(page_name):
+        st.session_state.selected_page = page_name
+
+# 선택된 페이지 확인
+page = st.session_state.selected_page
+
+# --- 사이드바 하단 정보 ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 문상혁")
+st.sidebar.markdown("""
+                    📨 E-mail: harrym8n@naver.com \
+                    
+                    🔗 GitHub: [방문하기](https://github.com/harrym8n)
+                    """)
 
 # --- 공통 스타일 ---
 sns.set_theme(style='whitegrid', font='AppleGothic')
@@ -106,12 +144,12 @@ if page == "🏠 프로젝트 소개":
 
     st.markdown("## 결과 및 성과")
 
-    with st.expander("결과"):
+    with st.expander("결과", expanded=True):
         st.markdown("""
         - 모델 성능(AUC 0.7148, F1-score 0.673) / 주요 변수(스루패스, 짧은 패스, 유효 슈팅, 롱패스, 블록 수)
         """)
 
-    with st.expander("성과"):
+    with st.expander("성과", expanded=True):
         st.markdown("""
         - 승리에 영향을 주는 플레이 패턴을 정량적으로 분석하고 맞춤형 전략 수립하여 승률 21%p 증가
         - 반복적인 API 호출 및 정상 경기 여부 확인 과정을 Airflow 기반 파이프라인으로 자동화하여, 매일 수동 실행·점검으로 인한 리소스를 절감하고 데이터 수집의 신뢰성과 효율성을 동시에 확보  
@@ -186,10 +224,10 @@ elif page == "📊 모델 실험":
 elif page == "⚽ 주요 변수 비교 분석":
     st.title("⚽ 주요 변수 비교 분석")
 
-    selected_var = st.selectbox("비교할 변수를 선택하세요", ["스루패스", "짧은패스", "유효슛", "롱패스", "블록"])
+    selected_var = st.selectbox("변수를 선택하세요", ["스루패스", "짧은패스", "유효슛", "롱패스", "블록"])
 
     if selected_var == "스루패스":
-        st.subheader("📊 스루패스 관련 비교 분석")
+        st.markdown("### 스루패스 관련 비교 분석")
 
         col1, col2 = st.columns([1, 1])
 
@@ -259,7 +297,7 @@ elif page == "⚽ 주요 변수 비교 분석":
 
 
     elif selected_var == "짧은패스":
-        st.markdown("## 📊 경기 결과별 평균 짧은 패스 데이터 비교 분석")
+        st.markdown("### 1. 경기 결과별 평균 짧은 패스 데이터 비교 분석")
 
         # 평균 데이터 계산
         # 1) 다른 유저
@@ -318,28 +356,25 @@ elif page == "⚽ 주요 변수 비교 분석":
             st.pyplot(fig2)
             st.markdown("**📊 나의 평균 짧은패스 데이터**")
             st.dataframe(my_summary_df, use_container_width=True)
-
+        
         # 결론 정리
-        st.markdown("""
-        > **결론**
-
-        1. 나는 **짧은 패스를 잘하지만, 이것만으로 승리는 어렵다.**  
-            - 패한 경기에서도 짧은 패스 성공률은 매우 높았음  
-            - 승리한 유저들의 짧은 패스 수치는 크게 높지 않음 → **“짧은 패스 수”가 승리의 직접 요인은 아닐 수 있음**
-
-        2. **패스 이후의 연결(슈팅, 공간 창출 등)이 중요할 수 있다.**  
-            - 짧은 패스는 빌드업의 한 수단일 뿐이고, 그 이후 단계가 부족했을 가능성  
-            - 유효 슛, 스루패스 성공 등과의 연계를 함께 분석해볼 필요 존재
-
-        3. **과도한 짧은 패스는 오히려 템포를 느리게 할 수 있다.**  
-            - 패한 경기에서도 패스 수치가 더 높다.  
-            - 승리자보다 지나치게 많은 짧은 패스를 시도 → 공격 전개 속도가 느려지거나 턴오버, 태클 등으로 공 소유권이 넘어 갈 수 있음  
-            - 공격 전개 속도 저하 → 수비에게 정비 시간 제공 → 슛 찬스 질 저하
-        """)
+        with st.expander("🔍 결론 보기", expanded=True):
+            st.markdown("""
+            1. 나는 **짧은 패스를 잘하지만, 이것만으로 승리는 어렵다.**  
+                - 패한 경기에서도 짧은 패스 성공률은 매우 높았음  
+                - 승리한 유저들의 짧은 패스 수치는 크게 높지 않음 → **“짧은 패스 수”가 승리의 직접 요인은 아닐 수 있음**
+            2. **패스 이후의 연결(슈팅, 공간 창출 등)이 중요할 수 있다.**  
+                - 짧은 패스는 빌드업의 한 수단일 뿐이고, 그 이후 단계가 부족했을 가능성  
+                - 유효 슛, 스루패스 성공 등과의 연계를 함께 분석해볼 필요 존재
+            3. **과도한 짧은 패스는 오히려 템포를 느리게 할 수 있다.**  
+                - 패한 경기에서도 패스 수치가 더 높다.  
+                - 승리자보다 지나치게 많은 짧은 패스를 시도 → 공격 전개 속도가 느려지거나 턴오버, 태클 등으로 공 소유권이 넘어 갈 수 있음  
+                - 공격 전개 속도 저하 → 수비에게 정비 시간 제공 → 슛 찬스 질 저하
+            """)
 
         # 구분선
         st.markdown("---")
-        st.markdown("## 📊 짧은 패스 수와 유효슛 수의 관계 분석")
+        st.markdown("### 2. 짧은 패스 수와 유효슛 수의 관계 분석")
 
         # col3 좌우 배치
         col_left, col_right = st.columns(2)
@@ -363,11 +398,11 @@ elif page == "⚽ 주요 변수 비교 분석":
             st.markdown(f"📌 **상관계수**: {correlation_others:.4f}")
 
             # 결론
-            st.markdown("""
-            > **결론**
-            - 다른 유저들은 짧은 패스와 유효슛이 미세하지만 **양의 상관관계**를 보이며,  
-            **승리한 유저는 음의 상관관계**, **패배한 유저는 양의 상관관계**가 나타남.
-            """)
+            with st.expander("🔍 결론 보기", expanded=True):
+                st.markdown("""
+                - 다른 유저들은 짧은 패스와 유효슛이 미세하지만 **양의 상관관계**를 보이며,  
+                **승리한 유저는 음의 상관관계**, **패배한 유저는 양의 상관관계**가 나타남.
+                """)
 
         with col_right:
             st.markdown("**나**")
@@ -388,16 +423,16 @@ elif page == "⚽ 주요 변수 비교 분석":
             st.markdown(f"📌 **상관계수**: {correlation_mine:.4f}")
 
             # 결론
-            st.markdown("""
-            > **결론**
-            - 나는 **승리를 제외한 모든 결과에서 음의 상관관계**가 나타남.  
-            즉, **짧은 패스를 선호하고 많이 하지만**, **유효슛으로 잘 이어지지 않음**.  
-            빌드업 이후 마무리 단계의 개선 필요.
-            """)
+            with st.expander("🔍 결론 보기", expanded=True):
+                st.markdown("""
+                - 나는 **승리를 제외한 모든 결과에서 음의 상관관계**가 나타남.  
+                즉, **짧은 패스를 선호하고 많이 하지만**, **유효슛으로 잘 이어지지 않음**.  
+                빌드업 이후 마무리 단계의 개선 필요.
+                """)
 
         # 구분선
         st.markdown("---")
-        st.markdown("## 📊 짧은 패스 후 전진 패스 비율 계산")
+        st.markdown("### 3. 짧은 패스 후 전진 패스 비율 계산")
         st.markdown("""
                     - 공격 템포 지표 정의 : 짧은패스 당 전진패스(스루패스, 롱패스)
                     - 공격 템포 = (스루패스 성공 + 롱패스 성공) / 짧은패스 성공
@@ -427,11 +462,11 @@ elif page == "⚽ 주요 변수 비교 분석":
             st.markdown(f"승리한 유저들의 평균 공격템포: {my_attack_tempo}")
 
             # 결론
-            st.markdown("""
-            > **결론**
-            - 다른 유저들은 짧은 패스와 유효슛이 미세하지만 **양의 상관관계**를 보이며,  
-            **승리한 유저는 음의 상관관계**, **패배한 유저는 양의 상관관계**가 나타남.
-            """)
+            with st.expander("🔍 결론 보기", expanded=True):
+                st.markdown("""
+                - 다른 유저들은 짧은 패스와 유효슛이 미세하지만 **양의 상관관계**를 보이며,  
+                **승리한 유저는 음의 상관관계**, **패배한 유저는 양의 상관관계**가 나타남.
+                """)
 
         with col_right:
             st.markdown("**나**")
@@ -450,15 +485,25 @@ elif page == "⚽ 주요 변수 비교 분석":
             # 전체 공격 템포
             my_attack_tempo = round(tmp_df['attackTempo'].mean(),4)
             st.markdown(f"전체 평균 공격템포: {my_attack_tempo}")
-
+            
             # 결론
-            st.markdown("""
-            > **결론**
-            1. 승리하는 경기에서 공격 템포(짧은 패스 당 전진패스)가 높다. - 공격 템포가 승리에 유의미히디.
-            2. 다른 유저들은 짧은 패스 후 전진 패스가 비교적 활발하다. (공격 템포가 좋음)
-            3. 나는 짧은 패스 후 전진 패스가 비교적 활발하지 않다. (공격 템포가 나쁨) 다른 유저 대비 약 0.5배
-            """)
+            with st.expander("🔍 결론 보기", expanded=True):
+                st.markdown("""
+                1. 승리하는 경기에서 공격 템포(짧은 패스 당 전진패스)가 높다. - 공격 템포가 승리에 유의미히디.
+                2. 다른 유저들은 짧은 패스 후 전진 패스가 비교적 활발하다. (공격 템포가 좋음)
+                3. 나는 짧은 패스 후 전진 패스가 비교적 활발하지 않다. (공격 템포가 나쁨) 다른 유저 대비 약 0.5배
+                """)
 
+
+        # 인사이트
+        st.markdown("---")
+        st.markdown("### 🧠 인사이트")
+        st.markdown("""
+            - 승리한 유저의 짧은 패스 시도 및 성공 횟수가 패배/무승부보다 더 많음  
+            - 짧은 패스 성공률은 모든 결과 그룹에서 큰 차이가 없으나, 시도 수 자체의 차이가 존재  
+            - 내 데이터에서도 승리한 경기에서 짧은 패스 횟수가 유의하게 많았으나 공격 템포(전진패스 비율)가 승리 유저보다 낮았다.
+            - **따라서, 짧은 패스 후 전진패스로 연결하는 공격 전개가 필요하다.**
+            """)
         # ⚽ 유효슛 분석 결과
         ## ✅ 1. 경기 결과별 유효슛 수 평균 비교
 
@@ -466,9 +511,9 @@ elif page == "⚽ 주요 변수 비교 분석":
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("### 📊 다른 유저의 경기결과별 유효슛 분포 시각화")
+            st.markdown("### 1. 다른 유저의 경기결과별 유효슛 분포 시각화")
             shoot_by_result = encoded_df.groupby('matchResult')['effectiveShootTotal'].mean().reset_index()
-            fig, ax = plt.subplots(figsize=(5, 4))
+            fig, ax = plt.subplots(figsize=(5, 5.27))
             sns.violinplot(data=encoded_df, x='matchResult', y='effectiveShootTotal', hue='matchResult', ax=ax)
             ax.set_title('경기결과별 유효슛 수 분포')
             ax.set_xlabel('경기 결과')
@@ -476,16 +521,16 @@ elif page == "⚽ 주요 변수 비교 분석":
             sns.despine()
             st.pyplot(fig)
 
-            st.markdown("> 결론")
-            st.markdown("""
-            - 유효슛은 경기결과와 상관관계가 높다.
-            """)
+            with st.expander("🔍 결론 보기", expanded=True):
+                st.markdown("""
+                - 유효슛은 경기결과와 상관관계가 높다.
+                """)
 
         with col2:
 
             ## ✅ 2. 유효슛과 다른 변수와의 상관관계 분석
 
-            st.markdown("### 📊 유효슛과 다른 변수와의 상관관계 분석")
+            st.markdown("### 2. 유효슛과 다른 변수와의 상관관계 분석")
 
             corr_df = encoded_df.drop(columns=['ouid', 'matchId', 'weekend', 'weekday', 'matchResult'])
             corr_matrix = corr_df.corr()[['effectiveShootTotal']]
@@ -496,18 +541,17 @@ elif page == "⚽ 주요 변수 비교 분석":
             plt.grid(False)
             st.pyplot(fig)
 
-            st.markdown("""
-            > 결론
-                        
-            - 유효슛과 상관관계가 높은 변수 선별(corr > 0.3)
-                - 총 슛 횟수는 너무 당연한 결과로 분석가치가 높지 않아 제외
-                - 평균 평점, 골은 경기 결과 지표이기 때문에 경기 결과에 영향을 미칠 수 없어 제외
-                - 코너킥 횟수 관련 분석 진행
-            """)
+            with st.expander("🔍 결론 보기", expanded=True):
+                st.markdown("""                        
+                - 유효슛과 상관관계가 높은 변수 선별(corr > 0.3)
+                    - 총 슛 횟수는 너무 당연한 결과로 분석가치가 높지 않아 제외
+                    - 평균 평점, 골은 경기 결과 지표이기 때문에 경기 결과에 영향을 미칠 수 없어 제외
+                    - 코너킥 횟수 관련 분석 진행 👇
+                """)
 
         
         st.markdown("---")
-        st.markdown("## 📊 경기 결과별 코너킥 횟수 분석")
+        st.markdown("### 3. 경기 결과별 코너킥 횟수 분석")
         ## ✅ 3. 경기 결과별 코너킥 횟수 분석
 
         col1, col2 = st.columns(2)
@@ -542,18 +586,26 @@ elif page == "⚽ 주요 변수 비교 분석":
         avg_ck = round(encoded_2_df['cornerKick'].mean(), 4)
         st.markdown(f"내 전체 평균 코너킥 횟수: {avg_ck}")
 
-        st.markdown("""
-        > 결론
-                    
-        - 승리 유저의 평균 코너킥 횟수는 1.91, 나는 1.48로 승리 유저보다 코너킥 횟수가 적다.
+        with st.expander("🔍 결론 보기", expanded=True):
+            st.markdown("""            
+            - 승리 유저의 평균 코너킥 횟수는 1.91, 나는 1.48로 승리 유저보다 코너킥 횟수가 적다.
+            - 코너킥을 많이 얻을수록 유효슛 기회가 많아지고, 유효슛은 승리와 높은 상관관계를 보이므로 공격 진영 사이드로의 롱패스를 활용하여 코너킥 기회를 많이 창출해야 한다.
+                - (롱패스와 코너킥 상관관계 높음)
+            """)
 
-        - 코너킥을 많이 얻을수록 유효슛 기회가 많아지고, 유효슛은 승리와 높은 상관관계를 보이므로 공격 진영 사이드로의 롱패스를 활용하여 코너킥 기회를 많이 창출해야 한다.
-            - (롱패스와 코너킥 상관관계 높음)
+        # 인사이트
+        st.markdown("---")
+        st.markdown("""
+        ### 🧠 인사이트
+        - 유효 슛 수는 승리한 유저가 압도적으로 많음  
+        - 내 경기 데이터 분석에서도 유효 슛 수가 많을수록 승률이 높았음  
+        - 머신러닝 모델에서 유효슛은 예측 성능에 중요한 변수 중 하나로 작용함  
+        - 측면으로의 전진패스를 활용하여 코너킥 기회를 많이 창출해야 한다.
         """)
 
     if selected_var == "롱패스":
         # 1. 경기 결과별 평균 롱패스 시도 및 성공 수 시각화
-        st.header("1. 경기 결과별 평균 롱패스 데이터")
+        st.markdown("### 1. 경기 결과별 평균 롱패스 데이터")
 
         col1, col2 = st.columns(2)
 
@@ -583,7 +635,7 @@ elif page == "⚽ 주요 변수 비교 분석":
             axes2[1].set_title('롱패스 성공')
             st.pyplot(fig2)
 
-        with st.expander("🔍 결론 보기"):
+        with st.expander("### 🔍 결론 보기", expanded=True):
             st.markdown("""
             - **승리한 유저**의 평균 롱패스 시도, 성공, 성공률이 **비기고 패한 유저보다 높다**.
             - 롱패스는 실제로 유효슛으로 이어지며, 유효슛은 승리와 높은 상관관계를 가진다.
@@ -591,7 +643,7 @@ elif page == "⚽ 주요 변수 비교 분석":
             """)
 
         # 2. 롱패스 성공률, 평균 비교
-        st.header("2. 승리 유저와 내 롱패스 성공률 비교")
+        st.markdown("### 2. 승리 유저와 내 롱패스 성공률 비교")
 
         # 다른 유저 성공률 계산
         tmp = longPass_tmp_df.copy()
@@ -608,19 +660,183 @@ elif page == "⚽ 주요 변수 비교 분석":
         col3, col4 = st.columns(2)
 
         with col3:
-            st.subheader("📈 다른 유저")
+            st.markdown("#### 📈 다른 유저")
             st.metric("롱패스 성공률", f"{other_success_rate*100:.2f}%")
             st.metric("평균 시도 수", f"{other_avg_try}")
             st.metric("평균 성공 수", f"{other_avg_success}")
 
         with col4:
-            st.subheader("📈 내 데이터")
+            st.markdown("#### 📈 내 데이터")
             st.metric("롱패스 성공률", f"{my_success_rate*100:.2f}%")
             st.metric("평균 시도 수", f"{my_avg_try}")
             st.metric("평균 성공 수", f"{my_avg_success}")
 
-        with st.expander("🔍 결론 보기"):
+        with st.expander("🔍 결론 보기", expanded=True):
             st.markdown(f"""
             - **나는 롱패스 성공률은 높지만**, 평균 시도 횟수는 승리한 유저보다 약 **20% 적음**.
             - 나는 **롱패스를 잘하는 유저**로 판단되며, 유효슛과 승리에 긍정적인 영향을 주는 롱패스를 **전략적으로 더 많이 시도**해야 한다.
+            """)
+
+    if selected_var == "블록":
+        ### 1. 블록 성공 수 / 블록 성공률과 상대 유효슛 수의 상관관계
+        st.markdown("### 1. 블록 성공 수 / 블록 성공률과 상대 유효슛 수의 상관관계")
+
+        # 데이터 준비
+        lose_df = encoded_df[encoded_df['matchResult'] == '패'][['matchId','effectiveShootTotal', 'possession']]
+        lose_df = lose_df.rename(columns={'effectiveShootTotal':'lose_effectiveShootTotal', 'possession':'lose_possession'})
+
+        win_df = encoded_df[encoded_df['matchResult'] == '승'][['matchId','blockTry','blockSuccess','possession']]
+        win_df = win_df.rename(columns={'blockTry':'win_blockTry', 'blockSuccess':'win_blockSuccess', 'possession':'win_possession'})
+
+        merge_df = pd.merge(lose_df, win_df, how='inner', on='matchId')
+        merge_df['block_success_rate'] = merge_df['win_blockSuccess'] / merge_df['win_blockTry'].replace(0, 1)
+
+        # 상관계수 계산
+        corr1, p1 = pearsonr(merge_df['win_blockSuccess'], merge_df['lose_effectiveShootTotal'])
+        corr2, p2 = pearsonr(merge_df['block_success_rate'], merge_df['lose_effectiveShootTotal'])
+
+        # 상관계수 요약표
+        corr_df = pd.DataFrame({
+            '변수': ['블록 성공 수', '블록 성공률'],
+            '상관계수': [round(corr1, 4), round(corr2, 4)],
+            'p-value': [round(p1, 4), round(p2, 4)]
+        })
+
+        # 시각화 + 요약
+        fig1, ax1 = plt.subplots(figsize=(8, 4))
+        sns.set_style("whitegrid")
+
+        # 그래프 꾸미기
+        sns.regplot(
+            data=merge_df,
+            x='win_blockSuccess',
+            y='lose_effectiveShootTotal',
+            ax=ax1,
+            scatter_kws={'color': '#1f77b4', 's': 30, 'alpha': 0.6},  
+            line_kws={'color': '#ff7f0e', 'linewidth': 2}             
+        )
+
+        ax1.set_title('블록 성공 수 vs 상대 유효슛 수', fontsize=10, fontweight='bold')
+        ax1.set_xlabel('블록 성공 수', fontsize=8)
+        ax1.set_ylabel('상대 유효슛 수', fontsize=8)
+        ax1.grid(axis='x')
+        ax1.tick_params(labelsize=8)
+        ax1.set_facecolor("#f9f9f9")  
+
+        # 시각화 출력
+        st.pyplot(fig1, use_container_width=False)
+
+        # 상관계수 요약 표
+        st.markdown("#### 상관계수 요약")
+        st.dataframe(corr_df, use_container_width=True)
+
+        ### 2. 경기 결과별 평균 블록 비교 분석
+        st.markdown("### 2. 경기 결과별 평균 블록 비교 분석")
+
+        block_df = encoded_df.groupby(['matchId', 'ouid', 'matchResult'])[['blockTry', 'blockSuccess']].sum().reset_index()
+        block_tmp_df = block_df.groupby('matchResult')[['blockTry','blockSuccess']].mean().reset_index()
+
+        block_2_df = encoded_2_df.groupby(['matchId', 'ouid', 'matchResult'])[['blockTry', 'blockSuccess']].sum().reset_index()
+        block_tmp_2_df = block_2_df.groupby('matchResult')[['blockTry','blockSuccess']].mean().reset_index()
+
+        # 시각화
+        col3, col4 = st.columns(2)
+        plt.rcParams['font.family'] = 'AppleGothic'
+        plt.rcParams['axes.unicode_minus'] = False
+
+        with col3:
+            st.markdown("**📌다른 유저**")
+            fig2, axes2 = plt.subplots(1, 2, figsize=(8, 3))
+            sns.barplot(data=block_tmp_df, x='matchResult', y='blockTry', ax=axes2[0], hue='matchResult')
+            axes2[0].set_title('블록 시도')
+            sns.barplot(data=block_tmp_df, x='matchResult', y='blockSuccess', ax=axes2[1], hue='matchResult')
+            axes2[1].set_title('블록 성공')
+            st.pyplot(fig2)
+
+        with col4:
+            st.markdown("**📌내 데이터**")
+            fig3, axes3 = plt.subplots(1, 2, figsize=(8, 3))
+            sns.barplot(data=block_tmp_2_df, x='matchResult', y='blockTry', ax=axes3[0], hue='matchResult')
+            axes3[0].set_title('블록 시도')
+            sns.barplot(data=block_tmp_2_df, x='matchResult', y='blockSuccess', ax=axes3[1], hue='matchResult')
+            axes3[1].set_title('블록 성공')
+            st.pyplot(fig3)
+
+        ### 3. 승리 경기 평균 블록 성공률
+        tmp1 = block_tmp_df[block_tmp_df['matchResult'] == '승']
+        success_rate_1 = sum(tmp1['blockSuccess']) / sum(tmp1['blockTry'])
+        avg_try_1 = tmp1['blockTry'].mean()
+        avg_success_1 = tmp1['blockSuccess'].mean()
+
+        success_rate_2 = sum(block_tmp_2_df['blockSuccess']) / sum(block_tmp_2_df['blockTry'])
+        avg_try_2 = block_tmp_2_df['blockTry'].mean()
+        avg_success_2 = block_tmp_2_df['blockSuccess'].mean()
+
+        summary_df = pd.DataFrame({
+            '구분': ['승리 유저', '내 데이터'],
+            '평균 블록 시도 수': [round(avg_try_1, 2), round(avg_try_2, 2)],
+            '평균 블록 성공 수': [round(avg_success_1, 2), round(avg_success_2, 2)],
+            '블록 성공률': [round(success_rate_1, 4), round(success_rate_2, 4)]
+        })
+
+        st.dataframe(summary_df, use_container_width=True)
+
+        ### 4. 블록과 승패와의 회귀분석
+        st.markdown("### 3. 블록과 승패와의 회귀분석")
+
+        reg_df = encoded_df.copy()
+        reg_df['win'] = reg_df['matchResult'].apply(lambda x: 1 if x == '승' else 0)
+        reg_df['blockSuccessRate'] = reg_df['blockSuccess'] / reg_df['blockTry'].replace(0, 1)
+        reg_df['blockSuccess_possession'] = reg_df['blockSuccess'] * reg_df['possession']
+
+        X = reg_df[['blockTry', 'blockSuccess', 'blockSuccessRate', 'blockSuccess_possession']]
+        y = reg_df['win']
+        X_const = sm.add_constant(X)
+        logit_model = sm.Logit(y, X_const)
+        result = logit_model.fit(disp=0)
+
+        # 회귀 요약표
+        summary_table = pd.DataFrame({
+            '변수명': result.params.index,
+            '회귀계수': result.params.values,
+            'p-value': result.pvalues
+        }).round(4)
+
+        # 평균 Marginal Effect
+        marginal_effect = result.get_margeff(at='overall').summary_frame().round(4).reset_index()
+        marginal_effect.columns = ['변수명', 'Marginal Effect', 'Std Err', 'z', 'P>|z|', '[0.025', '0.975]']
+
+        # 병합표
+        final_df = pd.merge(summary_table, marginal_effect[['변수명', 'P>|z|', 'Marginal Effect']], on='변수명', how='left')
+
+        # 해석 열 추가
+        final_df['해석'] = [
+            '상수항',
+            '블록 시도가 1회 증가할 때, 승리 확률은 약 1.63% 감소',
+            '블록 성공이 1회 증가할 때, 승리 확률은 약 81.86% 감소',
+            '블록 성공률과 승리 확률 사이의 유의미한 관계 없음',
+            '점유율을 동반한 블록 성공이 1회 증가할 때, 승리 확률은 약 1.74% 증가'
+        ]
+
+        # 열 순서 재정렬
+        final_df = final_df[['변수명', 'P>|z|', 'Marginal Effect', '해석']]
+        final_df.columns = ['변수명', 'P-value', 'Marginal Effect', '해석']
+        st.dataframe(final_df, use_container_width=True)
+
+        st.markdown("---")
+
+       # 해석 및 결론
+        st.markdown("### 🔍 결론 보기")
+        with st.expander("🔽 펼치기", expanded=True):
+            st.markdown("""
+            1. **무조건적인 블록 시도/성공은 승리에 도움이 되지 않음**
+                - 블록 횟수가 많을수록 패배 가능성이 높음 → 수세적 운영을 시사  
+            2. **효율보다 '상황'이 중요함**
+                - `블록 성공 * 점유율`이 승리와 유의미한 양의 관계
+                - 공을 소유하며 블록에 성공해야 경기 흐름을 통제 가능
+                        """)
+        st.markdown("""
+            ### 🧠 인사이트
+            1. 수세적인 플레이 줄이기 → 블록만 많은 경기는 오히려 패배로 이어질 수 있음
+            2. 전방 압박 및 점유율 회복 전술 고려 → 공수 전환이 빠른 적극적 수비가 승리에 긍정적
             """)
