@@ -8,11 +8,23 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 import statsmodels.api as sm
+import os
+import matplotlib.font_manager as fm
 
+# 한글 폰트 설정
+# 폰트 파일 경로 (예: 프로젝트 폴더 내 fonts 폴더에 있을 경우)
+font_path = "steamlit/fonts/나눔 글꼴/NanumGothic.ttf"
 
-plt.rcParams['font.family'] = 'AppleGothic'
-plt.rcParams['axes.unicode_minus'] = False
-sns.set_theme(font='AppleGothic')
+# 폰트 등록
+fm.fontManager.addfont(font_path)
+font_name = fm.FontProperties(fname=font_path).get_name()
+
+# matplotlib 설정
+plt.rc("font", family=font_name)
+plt.rcParams["axes.unicode_minus"] = False  # 마이너스 기호 깨짐 방지
+
+# seaborn 설정 (matplotlib 기반이므로 동일 적용)
+sns.set_theme(font=font_name)
 
 
 # 데이터 호출
@@ -76,7 +88,7 @@ st.sidebar.markdown("""
                     """)
 
 # --- 공통 스타일 ---
-sns.set_theme(style='whitegrid', font='AppleGothic')
+sns.set_theme(style='whitegrid', font=font_name)
 
 # --- 1. 프로젝트 소개 ---
 if page == "🏠 프로젝트 소개":
@@ -323,7 +335,7 @@ elif page == "⚽ 주요 변수 비교 분석":
         })
 
         # 스타일
-        sns.set_theme(style='whitegrid', font='AppleGothic')
+        sns.set_theme(style='whitegrid', font=font_name)
 
 
         # 그래프 나란히 배치
@@ -741,7 +753,6 @@ elif page == "⚽ 주요 변수 비교 분석":
 
         # 시각화
         col3, col4 = st.columns(2)
-        plt.rcParams['font.family'] = 'AppleGothic'
         plt.rcParams['axes.unicode_minus'] = False
 
         with col3:
